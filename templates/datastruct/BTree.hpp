@@ -18,8 +18,9 @@
 using namespace std;
 
 struct Point {
-    uint64_t key;                 // Índice de Hilbert
-    vector<double> coords;     // Coordenadas originales
+    uint64_t key;                 // Índice de Hilbert posicion
+    uint64_t indice_h;   
+    double lat,lon;    // Coordenadas originales
     int cluster_id;
 
     Point() : key(0), coords(), cluster_id(-1) {}

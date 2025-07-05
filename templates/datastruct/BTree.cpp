@@ -72,7 +72,7 @@ void BTreeNode::traverse() {
             children[i]->traverse();
 
         cout << "Key: " << keys[i].key << " | Coords: ";
-        for (auto v : keys[i].coords) cout << v << ", ";
+        cout << keys[i].lat << ", "<<keys[i].lon;
 
         cout << " | cluster ID: "<<keys[i].cluster_id<<endl;
         // for (auto& d : keys[i].data) cout << d << " ";
@@ -250,15 +250,11 @@ std::vector<Point> buscarRangoHilbert(BTree& arbol,
     
             // Revisar si el punto está dentro del rango original (por coordenadas reales)
             const auto& p = nodo->keys[i];
-            bool dentro = true;
-            for (size_t d = 0; d < 2; ++d) {
-                if (p.coords[d] < coord_min[d] || p.coords[d] > coord_max[d]) {
-                    dentro = false;
-                    break;
-                }
-            }
-            if (dentro)
+
+            if (!(p.lat < coord_min[0] || p.lat > coord_max[0] 
+                || p.lon < coord_min[1] || p.lon > coord_max[1])) {
                 encontrados.push_back(p);
+            }            
     
             ++i;
         }
@@ -287,15 +283,16 @@ vector<Point> leerDesdeBinario(const string& nombreArchivo) {
         return datos;
     }
 
-    size_t n_datos, n_columnas;
-    inBin.read(reinterpret_cast<char*>(&n_datos), sizeof(size_t));
-    inBin.read(reinterpret_cast<char*>(&n_columnas), sizeof(size_t));
+    uint64_t n_datos, n_columnas;
+    inBin.read(reinterpret_cast<char*>(&n_datos), sizeof(uint64_t));
+    inBin.read(reinterpret_cast<char*>(&n_columnas), sizeof(uint64_t));
 
-    for (size_t i = 0; i < n_datos; ++i) {
+    for (uint64_t i = 0; i < n_datos; ++i) {
         Point d;
-        d.coords.resize(n_columnas);
-        inBin.read(reinterpret_cast<char*>(d.coords.data()), sizeof(double) * n_columnas);
         inBin.read(reinterpret_cast<char*>(&d.key), sizeof(uint64_t));
+        inBin.read(reinterpret_cast<char*>(&d.indice_h), sizeof(uint64_t));
+        inBin.read(reinterpret_cast<char*>(&d.lat), sizeof(double));
+        inBin.read(reinterpret_cast<char*>(&d.lon), sizeof(double));
         inBin.read(reinterpret_cast<char*>(&d.cluster_id), sizeof(int));
         datos.push_back(d);
     }

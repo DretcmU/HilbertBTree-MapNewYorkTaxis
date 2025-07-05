@@ -19,7 +19,9 @@ using namespace std;
 // ===================
 
 struct Dato {
-    vector<double> columnas;
+    double lat;
+    double lon;
+    vector<uint32_t> columnas;
     uint64_t indice_h = 0;
     uint64_t key;
     int cluster_id = -1; // -1 = sin asignar, -2 = ruido
@@ -253,7 +255,7 @@ vector<Dato> leerColumnasDeCSVConHilbert(
             continue;
         }
         Dato dato;
-        vector<uint32_t> coords;
+        //vector<uint32_t> coords;
         vector<uint32_t> pos;
 
         for (size_t j = 0; j < indicesSeleccionados.size(); ++j) {
@@ -266,20 +268,26 @@ vector<Dato> leerColumnasDeCSVConHilbert(
             );
 
             if (j < 2) {
-                dato.columnas.push_back(val);
+                if (j==0)
+                    dato.lat = val;
+                else
+                    dato.lon = val;
+
                 pos.push_back(norm);
             } else {
-                coords.push_back(norm);
+                dato.columnas.push_back(norm);
             }
         }
 
         dato.key = hilbertIndexND(pos, bitsHilbert);
-        dato.indice_h = hilbertIndexND(coords, bitsHilbert);
+        dato.indice_h = hilbertIndexND(dato.columnas, bitsHilbert);
         datos.push_back(dato);
     }
 
     return datos;
 }
+
+
 
 // ============================
 // EXPANSIÓN DEL CLUSTER (KD)
@@ -330,8 +338,7 @@ void dbscanKD(vector<Dato*>& grupo, double eps, int minPts, int& nextClusterId) 
     }
 }
 
-
-void guardarEnBinario(const vector<Dato>& datos, const vector<string>& columnas, const string& nombreArchivo) {
+void guardarEnBinario(const vector<Dato>& datos, const string& nombreArchivo) {
     ofstream outBin(nombreArchivo, ios::binary);
     if (!outBin.is_open()) {
         cerr << "No se pudo crear el archivo binario de salida: " << nombreArchivo << endl;
@@ -347,54 +354,27 @@ void guardarEnBinario(const vector<Dato>& datos, const vector<string>& columnas,
     }
 
     // Encabezado binario
-    uint64_t n_columnas = 2;  // Solo lat y lon
+    uint64_t n_columnas = 5;
     uint64_t n_datos = datos.size();
     outBin.write(reinterpret_cast<const char*>(&n_datos), sizeof(uint64_t));
     outBin.write(reinterpret_cast<const char*>(&n_columnas), sizeof(uint64_t));
 
     // Datos
     for (const Dato& d : datos) {
-        outBin.write(reinterpret_cast<const char*>(d.columnas.data()), sizeof(double) * n_columnas);
         outBin.write(reinterpret_cast<const char*>(&d.key), sizeof(uint64_t));
+        outBin.write(reinterpret_cast<const char*>(&d.indice_h), sizeof(uint64_t));
+        outBin.write(reinterpret_cast<const char*>(&d.lat), sizeof(double));
+        outBin.write(reinterpret_cast<const char*>(&d.lon), sizeof(double));
         outBin.write(reinterpret_cast<const char*>(&d.cluster_id), sizeof(int));
 
-        // También escribir en .txt
-        outTxt << d.key << " " << d.cluster_id << "\n";
+        // También escribir en .txt para revisión humana
+        outTxt << d.key << " " << d.indice_h << " " << d.lat << " " << d.lon << " " << d.cluster_id << "\n";
     }
 
     outBin.close();
     outTxt.close();
     cout << "Archivo binario guardado como '" << nombreArchivo << "'\n";
     cout << "Archivo de texto guardado como '" << nombreTxt << "'\n";
-}
-
-vector<Dato> leerDesdeBinario(const string& nombreArchivo) {
-    vector<Dato> datos;
-    ifstream inBin(nombreArchivo, ios::binary);
-    if (!inBin.is_open()) {
-        cerr << "No se pudo abrir el archivo binario: " << nombreArchivo << endl;
-        return datos;
-    }
-
-    size_t n_datos, n_columnas;
-    inBin.read(reinterpret_cast<char*>(&n_datos), sizeof(size_t));
-    inBin.read(reinterpret_cast<char*>(&n_columnas), sizeof(size_t));
-
-    for (size_t i = 0; i < n_datos; ++i) {
-        Dato d;
-        if(d.columnas[0]==0.0){
-            cout<<1000000<<endl;
-        }
-        d.columnas.resize(n_columnas);
-        inBin.read(reinterpret_cast<char*>(d.columnas.data()), sizeof(double) * n_columnas);
-        inBin.read(reinterpret_cast<char*>(&d.key), sizeof(uint64_t));
-        inBin.read(reinterpret_cast<char*>(&d.cluster_id), sizeof(int));
-        datos.push_back(d);
-    }
-
-    inBin.close();
-    cout << "Archivo binario leído correctamente: " << nombreArchivo << "\n";
-    return datos;
 }
 
 int estimarMinPts(size_t cantidadDatos) {
@@ -442,7 +422,6 @@ double estimarEpsilon1D(const vector<Dato*>& grupo, int k) {
     return distancias[distancias.size() * 0.9]; // valor en el percentil 90
 }
 
-
 int main() {
     string archivoCSV = "processed_data_subset_500k.csv";
     vector<string> columnas = {
@@ -452,20 +431,16 @@ int main() {
         "improvement_surcharge", "total_amount"
     };
     int bitsHilbert = 16;
+
+    //auto [minVals, maxVals] = calcularMinMax(archivoCSV, columnas);
+    //guardarMinMax("minmax.txt", minVals, maxVals);
+
+    //vector<Dato> datos = leerYConstruirDatos(archivoCSV, columnas, minVals, maxVals, bitsHilbert);
+
     int agrupamiento_por_bits = 2; // numero de digitios que restaremos al (indice hilbert x cantidad de columnas)
 
     vector<Dato> datos = leerColumnasDeCSVConHilbert(archivoCSV, columnas, bitsHilbert);
-    int a;
-    for(auto&d : datos)    {
-    if(d.columnas[0]==0.0){
-            cout<<1000000<<endl;
-            cin>>a;
-        }
-        // for(auto&val : d.columnas)
-        // cout<<val<<" ";
-        // cout<<d.indice_h<<endl;
-    }
-
+    
     // Agrupar punteros por bits altos
     map<uint64_t, vector<Dato*>> gruposHilbert;
 
@@ -485,9 +460,9 @@ int main() {
         vector<Dato*>& grupo = it->second;
         
         //cout<<"A\n";
-        //int minPts = estimarMinPts(grupo.size());
+        int minPts = estimarMinPts(grupo.size());
         //cout<<"B\n";
-        //double eps = estimarEpsilon1D(grupo, minPts);        
+        double eps = estimarEpsilon1D(grupo, minPts);        
         //cout << "Grupo " << grupo_id << " -> size: " << grupo.size()<< " | minPts: " << minPts << " | eps: " << eps << endl;
         dbscanKD(grupo, eps, minPts, nextClusterId);
     }
@@ -502,6 +477,25 @@ int main() {
         conteoClusters[d.cluster_id]++;
     }
 
+    // Reasignar clusters de un solo punto como ruido (-2)
+    for (auto& par : conteoClusters) {
+        int id = par.first;
+        int count = par.second;
+
+        if (id >= 0 && count == 1) { // Solo los clusters válidos de un solo punto
+            for (Dato& d : datos) {
+                if (d.cluster_id == id) {
+                    d.cluster_id = -2;
+                    break; // solo uno por definición
+                }
+            }
+        }
+    }
+
+    conteoClusters.clear();
+    for (const auto& d : datos) {
+        conteoClusters[d.cluster_id]++;
+    }
     long con=0;
     for (auto it = conteoClusters.begin(); it != conteoClusters.end(); ++it) {
         int id = it->first;
@@ -518,10 +512,10 @@ int main() {
     //     cout << "Fila " << i << " cluster = " << datos[i].cluster_id << endl;
     // }
 
-    sort(datos.begin(), datos.end(), [](const Dato& a, const Dato& b) {
-        return a.key < b.key;
-    });
-    guardarEnBinario(datos,columnas, "BinDatos.bin");
+    // sort(datos.begin(), datos.end(), [](const Dato& a, const Dato& b) {
+    //     return a.key < b.key;
+    // });
+    guardarEnBinario(datos, "BinDatos.bin");
     cout<<"size: "<<datos.size()<<endl;
     std::cout << "Tiempo total de DBSCAN + KDTree: " << duracion.count() << " segundos" << std::endl;
     

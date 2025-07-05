@@ -2,34 +2,22 @@
 <html>
 <head>
   <title>Mapa Criminalidad Nueva York</title>
+  <!-- CSS locales desde templates -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw/dist/leaflet.draw.css" />
-  <style>
-    body {
-      margin: 0;
-      display: flex;
-    }
-    #map {
-      height: 100vh;
-      flex: 1;
-    }
-    #controls {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 1000;
-      background: white;
-      padding: 8px 12px;
-      border-radius: 8px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.3);
-      font-family: sans-serif;
-    }
-  </style>
+  <link rel="stylesheet" href="templates/estilos.css" /> 
+  
 </head>
 <body>
   <div id="map"></div>
+
   <div id="controls">
     <button onclick="buscarCriminalidad()">Buscar en zona</button>
+  </div>
+
+  <div id="rankingPanel">
+    <h3>Ranking de puntos</h3>
+    <div id="rankingLista"></div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -78,64 +66,11 @@
     map.on('draw:deleted', function (e) {
       bounds = null;
       puntosLayer.clearLayers();
-    });
-
-    function getColorFromValue(value, maxValue = 910) {
-      const hue = (value / maxValue) * 360;  // Hue de 0 a 360
-      return `hsl(${hue}, 100%, 50%)`;       // Saturación y brillo constantes
-    }
-
-    let puntosActuales = []; // se guarda tras fetch
-
-    function buscarCriminalidad() {
-      if (!bounds) return alert("Dibuja un área primero");
-
-      const data = {
-        minLat: bounds.getSouth(),
-        minLon: bounds.getWest(),
-        maxLat: bounds.getNorth(),
-        maxLon: bounds.getEast()
-      };
-
-      fetch("http://localhost:8080/consultar", {
-        method: "POST",
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      }).then(res => res.json())
-        .then(puntos => {
-          puntosActuales = puntos; // Guardamos para uso en evento click
-          puntosLayer.clearLayers();
-
-          puntos.forEach((p, i) => {
-            const marker = L.circleMarker([p.lat, p.lon], {
-              radius: 4,
-              color: getColorFromValue(p.color)
-            }).addTo(puntosLayer);
-
-            marker.on("click", () => {
-              mostrarRanking(p.key);
-            });
-          });
-        })
-        .catch(err => alert("Error en la consulta: " + err));
-    }
-
-    function mostrarRanking(keyClickeado) {
-      // Ordenamos por diferencia absoluta de key al clickeado
-      const ordenados = [...puntosActuales].sort((a, b) =>
-        Math.abs(a.key - keyClickeado) - Math.abs(b.key - keyClickeado)
-      );
-
-      // Buscar la posición del punto clickeado
-      const posicion = ordenados.findIndex(p => p.key === keyClickeado);
-      if (posicion === -1) {
-        alert("No se encontró el punto en el ranking.");
-        return;
-      }
-
-      const punto = ordenados[posicion];
-      alert(`📍 Este punto tiene ranking #${posicion + 1}\nLat: ${punto.lat}\nLon: ${punto.lon}\nCluster: ${punto.color}`);
-    }
+      document.getElementById("rankingPanel").style.display = "none";
+    });    
   </script>
+
+  <!-- JS locales desde templates -->
+  <script src="templates/index.js"></script>
 </body>
 </html>
