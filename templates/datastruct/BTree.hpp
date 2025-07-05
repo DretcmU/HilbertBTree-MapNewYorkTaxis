@@ -23,9 +23,9 @@ struct Point {
     double lat,lon;    // Coordenadas originales
     int cluster_id;
 
-    Point() : key(0), coords(), cluster_id(-1) {}
-    Point(uint64_t k, vector<double> c, int clus_id)
-        : key(k), coords(c), cluster_id(clus_id) {}
+    Point(){}
+    // Point(uint64_t k, vector<double> c, int clus_id)
+    //     : key(k), coords(c), cluster_id(clus_id) {}
 
     bool operator<(const Point& other) const {
         return key < other.key;

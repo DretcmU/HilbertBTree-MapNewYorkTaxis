@@ -53,8 +53,8 @@ int main() {
             json respuesta = json::array();
             for (const auto& p : encontrados) {
                 respuesta.push_back({
-                    {"lat", p.coords[0]},
-                    {"lon", p.coords[1]},
+                    {"lat", p.lat},
+                    {"lon", p.lon},
                     {"color", p.cluster_id},
                     {"indice_h", p.indice_h}
                 });
