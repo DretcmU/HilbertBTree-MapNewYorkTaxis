@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <set>
+#include <numeric>
 #include <chrono>
 
 using namespace std;
@@ -377,49 +378,45 @@ void guardarEnBinario(const vector<Dato>& datos, const string& nombreArchivo) {
     cout << "Archivo de texto guardado como '" << nombreTxt << "'\n";
 }
 
-int estimarMinPts(size_t cantidadDatos) {
-    return std::max(4, static_cast<int>(log2(cantidadDatos))); // al menos 4
+int estimarMinPts(size_t cantidadDatos, int dimensiones) {
+    int base = 2 * dimensiones;
+    return std::max(base, static_cast<int>(log2(cantidadDatos)));
 }
 
-double estimarEpsilon1D(const vector<Dato*>& grupo, int k) {
-    if (grupo.size() < 2) return 1.0;
-
-    // Primero, normalizamos los valores de indice_h
-    uint64_t min_h = grupo[0]->indice_h;
-    uint64_t max_h = grupo[0]->indice_h;
-
-    for (Dato* d : grupo) {
-        min_h = std::min(min_h, d->indice_h);
-        max_h = std::max(max_h, d->indice_h);
+double distanciaND(const vector<uint32_t>& a, const vector<uint32_t>& b) {
+    double suma = 0.0;
+    for (size_t i = 0; i < a.size(); ++i) {
+        double d = static_cast<double>(a[i]) - static_cast<double>(b[i]);
+        suma += d * d;
     }
+    return sqrt(suma);
+}
 
-    double rango = static_cast<double>(max_h - min_h);
-    if (rango == 0.0) return 0.01;  // todos iguales, no hay separación
+double estimarEpsilonND(const vector<Dato*>& grupo, int k) {
+    if (grupo.size() <= k) return 0.01;
 
-    vector<double> distancias;
-    k = std::min(k, static_cast<int>(grupo.size() - 1));
-
+    vector<double> k_dists;
     for (Dato* p : grupo) {
-        vector<double> vecinos;
-        double p_norm = (p->indice_h - min_h) / rango;
+        vector<double> distancias;
+
         for (Dato* q : grupo) {
             if (p == q) continue;
-            double q_norm = (q->indice_h - min_h) / rango;
-            vecinos.push_back(abs(p_norm - q_norm));
+            double d = distanciaND(p->columnas, q->columnas);
+            distancias.push_back(d);
         }
 
-        std::sort(vecinos.begin(), vecinos.end());
+        sort(distancias.begin(), distancias.end());
 
-        if (vecinos.size() >= k)
-            distancias.push_back(vecinos[k - 1]);
-        else if (!vecinos.empty())
-            distancias.push_back(vecinos.back());
+        if (distancias.size() >= k)
+            k_dists.push_back(distancias[k - 1]);
+        else if (!distancias.empty())
+            k_dists.push_back(distancias.back());
     }
 
-    if (distancias.empty()) return 0.01;
+    if (k_dists.empty()) return 0.01;
 
-    std::sort(distancias.begin(), distancias.end());
-    return distancias[distancias.size() * 0.9]; // valor en el percentil 90
+    double suma = accumulate(k_dists.begin(), k_dists.end(), 0.0);
+    return suma / k_dists.size();  // Promedio del k-ésimo vecino más cercano
 }
 
 int main() {
@@ -449,9 +446,14 @@ int main() {
         gruposHilbert[grupo_id].push_back(&dato);
     }
 
+    vector<Dato*> ptrs;
+    for (Dato& d : datos) ptrs.push_back(&d);
+
     // Aplicar DBSCAN a cada grupo
-    int nextClusterId = 0, minPts=4;
-    double eps = 0.2;
+    int nextClusterId = 0, minPts= estimarMinPts(datos.size(),9);;
+    double eps = estimarEpsilonND(ptrs, minPts - 1);
+    cout <<" minPts: " << minPts << " | eps: " << eps << endl;
+
     auto inicio = std::chrono::high_resolution_clock::now();
 
     // APLICAR DBSCAN A CADA GRUPO
@@ -460,9 +462,9 @@ int main() {
         vector<Dato*>& grupo = it->second;
         
         //cout<<"A\n";
-        int minPts = estimarMinPts(grupo.size());
+        //int minPts = estimarMinPts(grupo.size());
         //cout<<"B\n";
-        double eps = estimarEpsilon1D(grupo, minPts);        
+        //double eps = estimarEpsilon1D(grupo, minPts);        
         //cout << "Grupo " << grupo_id << " -> size: " << grupo.size()<< " | minPts: " << minPts << " | eps: " << eps << endl;
         dbscanKD(grupo, eps, minPts, nextClusterId);
     }
