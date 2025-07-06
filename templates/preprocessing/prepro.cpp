@@ -22,7 +22,7 @@ using namespace std;
 struct Dato {
     double lat;
     double lon;
-    vector<uint32_t> columnas;
+    vector<double> columnas;
     uint64_t indice_h = 0;
     uint64_t key;
     int cluster_id = -1; // -1 = sin asignar, -2 = ruido
@@ -194,7 +194,7 @@ vector<Dato> leerColumnasDeCSVConHilbert(
 
         // Validación: verificar que haya suficientes columnas
         if (filaCompleta.size() <= 2) continue;
-
+        //cout<<filaCompleta[1]<<endl;
         try {
             if (!filaCompleta[1].empty() && !filaCompleta[2].empty()) {
                 double val1 = stod(filaCompleta[1]);
@@ -234,13 +234,18 @@ vector<Dato> leerColumnasDeCSVConHilbert(
         maxVals.push_back(maxV);
     }
 
-    int xdatoxd=0;
+    //int xdatoxd=0;
     // vector<double> min_norm = {39.9, -74.9};  // latitud mínima, longitud mínima
     // vector<double> max_norm = {41.1, -72.9};  // latitud máxima, longitud máxima
     // for(int i=0;i<2;i++){
     //     if(minVals[i]<min_norm[i]) minVals[i] = min_norm[i];
     //     if(maxVals[i]>max_norm[i]) maxVals[i] = max_norm[i];
     // }
+
+    minVals[0] = 39.9;
+    minVals[1] = -74.9;  // latitud mínima, longitud mínima
+    maxVals[0] = 41.1;
+    maxVals[1] = -72.9;  // latitud máxima, longitud máxima
 
     cout<<"Min: " <<minVals[0]<<" "<<minVals[1]<<endl;
     cout<<"Max: " <<maxVals[0]<<" "<<maxVals[1]<<endl;
@@ -256,16 +261,17 @@ vector<Dato> leerColumnasDeCSVConHilbert(
             continue;
         }
         Dato dato;
-        //vector<uint32_t> coords;
+        vector<uint32_t> coords;
         vector<uint32_t> pos;
 
         for (size_t j = 0; j < indicesSeleccionados.size(); ++j) {
             int idx = indicesSeleccionados[j];
             double val = stod(fila[idx]);
+            double norm_val = (val - minVals[j]) / (maxVals[j] - minVals[j]);
 
             // Normalización
             uint32_t norm = static_cast<uint32_t>(
-                ((val - minVals[j]) / (maxVals[j] - minVals[j])) * ((1 << bitsHilbert) - 1)
+                (norm_val) * ((1 << bitsHilbert) - 1)
             );
 
             if (j < 2) {
@@ -276,12 +282,13 @@ vector<Dato> leerColumnasDeCSVConHilbert(
 
                 pos.push_back(norm);
             } else {
-                dato.columnas.push_back(norm);
+                coords.push_back(norm);
+                dato.columnas.push_back(norm_val);
             }
         }
 
         dato.key = hilbertIndexND(pos, bitsHilbert);
-        dato.indice_h = hilbertIndexND(dato.columnas, bitsHilbert);
+        dato.indice_h = hilbertIndexND(coords, bitsHilbert);
         datos.push_back(dato);
     }
 
@@ -369,7 +376,7 @@ void guardarEnBinario(const vector<Dato>& datos, const string& nombreArchivo) {
         outBin.write(reinterpret_cast<const char*>(&d.cluster_id), sizeof(int));
 
         // También escribir en .txt para revisión humana
-        outTxt << d.key << " " << d.indice_h << " " << d.lat << " " << d.lon << " " << d.cluster_id << "\n";
+        outTxt << d.indice_h << " " << d.cluster_id << "\n";
     }
 
     outBin.close();
@@ -383,7 +390,7 @@ int estimarMinPts(size_t cantidadDatos, int dimensiones) {
     return std::max(base, static_cast<int>(log2(cantidadDatos)));
 }
 
-double distanciaND(const vector<uint32_t>& a, const vector<uint32_t>& b) {
+double distanciaND(const vector<double>& a, const vector<double>& b) {
     double suma = 0.0;
     for (size_t i = 0; i < a.size(); ++i) {
         double d = static_cast<double>(a[i]) - static_cast<double>(b[i]);
@@ -434,7 +441,7 @@ int main() {
 
     //vector<Dato> datos = leerYConstruirDatos(archivoCSV, columnas, minVals, maxVals, bitsHilbert);
 
-    int agrupamiento_por_bits = 2; // numero de digitios que restaremos al (indice hilbert x cantidad de columnas)
+    int agrupamiento_por_bits = 50; // numero de digitios que restaremos al indice hilbert 
 
     vector<Dato> datos = leerColumnasDeCSVConHilbert(archivoCSV, columnas, bitsHilbert);
     
@@ -442,17 +449,20 @@ int main() {
     map<uint64_t, vector<Dato*>> gruposHilbert;
 
     for (Dato& dato : datos) {
-        uint64_t grupo_id = dato.indice_h >> (bitsHilbert * (columnas.size()) - agrupamiento_por_bits);
+        uint64_t grupo_id = dato.indice_h >> agrupamiento_por_bits;//(bitsHilbert * (columnas.size()) - agrupamiento_por_bits);
         gruposHilbert[grupo_id].push_back(&dato);
+        //cout<<grupo_id<<" ";
     }
+    
 
-    vector<Dato*> ptrs;
-    for (Dato& d : datos) ptrs.push_back(&d);
+    //vector<Dato*> ptrs;
+    //for (Dato& d : datos) ptrs.push_back(&d);
 
     // Aplicar DBSCAN a cada grupo
-    int nextClusterId = 0, minPts= estimarMinPts(datos.size(),9);;
-    double eps = estimarEpsilonND(ptrs, minPts - 1);
-    cout <<" minPts: " << minPts << " | eps: " << eps << endl;
+    int nextClusterId = 0;
+    int minPts= 18;//estimarMinPts(datos.size(),9);;
+    double eps = 0.1;//estimarEpsilonND(ptrs, minPts - 1);
+    //cout <<" minPts: " << minPts << " | eps: " << eps << endl;
 
     auto inicio = std::chrono::high_resolution_clock::now();
 
@@ -462,9 +472,9 @@ int main() {
         vector<Dato*>& grupo = it->second;
         
         //cout<<"A\n";
-        //int minPts = estimarMinPts(grupo.size());
+        //int minPts = estimarMinPts(grupo.size(),9);
         //cout<<"B\n";
-        //double eps = estimarEpsilon1D(grupo, minPts);        
+        //double eps = estimarEpsilonND(grupo, minPts);        
         //cout << "Grupo " << grupo_id << " -> size: " << grupo.size()<< " | minPts: " << minPts << " | eps: " << eps << endl;
         dbscanKD(grupo, eps, minPts, nextClusterId);
     }
